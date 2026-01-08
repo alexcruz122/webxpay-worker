@@ -2,31 +2,24 @@ addEventListener("fetch", (event) => {
   event.respondWith(handleRequest(event.request));
 });
 
+// ---------------------------
 // CORS headers
+// ---------------------------
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
-// load secrets
+// ---------------------------
+// Secrets (set via wrangler secret)
+// ---------------------------
 const MERCHANT_ID = globalThis.MERCHANT_ID;
 const SECRET_KEY = globalThis.SECRET_KEY;
 
-async function handleRequest(request) {
-  const url = new URL(request.url);
-
-// Health check
-if (request.method === "GET" && url.pathname === "/") {
-  return new Response("✅ WebXPay LIVE backend running (Cloudflare)", {
-    headers: corsHeaders, // <- no parentheses here
-  });
-}
-
-  return new Response("Not found", { status: 404, headers: corsHeaders });
-}
-
-// WebXPay LIVE Public Key
+// ---------------------------
+// WebXPay Public Key (for encryption)
+// ---------------------------
 const WEBXPAY_PUBLIC_KEY = `
 -----BEGIN PUBLIC KEY-----
 MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDla3BZjh19LvuG+qYOF3gpcqCM
@@ -36,34 +29,48 @@ sZx1THY1BzCnnBdHPwIDAQAB
 -----END PUBLIC KEY-----
 `;
 
+// ---------------------------
 // Helper: encrypt order_id|amount
+// ---------------------------
 function encryptPayment(plain) {
-  // Workers do not support Node crypto directly
-  // So you will need to implement WebCrypto equivalent
+  // WebCrypto does not support Node crypto
+  // Temporary placeholder: base64 (for testing only)
   const encoder = new TextEncoder();
   const data = encoder.encode(plain);
-  // NOTE: For live deployment, you need to handle RSA encryption properly
-  return btoa(String.fromCharCode(...data)); // temporary base64 placeholder
+  return btoa(String.fromCharCode(...data));
 }
 
+// ---------------------------
+// Main handler
+// ---------------------------
 async function handleRequest(request) {
   const url = new URL(request.url);
 
-  // Handle OPTIONS preflight
+  // OPTIONS preflight (CORS)
   if (request.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // ---------------------------
   // Health check
-  if (url.pathname === "/") {
-    return new Response("✅ WebXPay LIVE backend running", {
+  // ---------------------------
+  if (request.method === "GET" && url.pathname === "/") {
+    return new Response("✅ WebXPay LIVE backend running (Cloudflare)", {
       headers: corsHeaders,
     });
   }
 
+  // ---------------------------
   // Create payment
+  // ---------------------------
   if (url.pathname === "/create-payment" && request.method === "POST") {
-    const data = await request.json();
+    let data;
+    try {
+      data = await request.json();
+    } catch {
+      return new Response("Invalid JSON body", { status: 400, headers: corsHeaders });
+    }
+
     const {
       order_id,
       amount,
@@ -76,10 +83,11 @@ async function handleRequest(request) {
     } = data;
 
     if (!order_id || !amount) {
-      return new Response("Missing order_id or amount", { status: 400 });
+      return new Response("Missing order_id or amount", { status: 400, headers: corsHeaders });
     }
 
     const encrypted = encryptPayment(`${order_id}|${amount}`);
+
     const html = `
 <!DOCTYPE html>
 <html>
@@ -100,12 +108,24 @@ async function handleRequest(request) {
   </body>
 </html>
 `;
+
     return new Response(html, { headers: { ...corsHeaders, "Content-Type": "text/html" } });
   }
 
+  // ---------------------------
   // Payment callback
+  // ---------------------------
   if (url.pathname === "/payment-success") {
-    const data = request.method === "POST" ? await request.json() : Object.fromEntries(url.searchParams.entries());
+    let data;
+    if (request.method === "POST") {
+      try {
+        data = await request.json();
+      } catch {
+        data = {};
+      }
+    } else {
+      data = Object.fromEntries(url.searchParams.entries());
+    }
 
     const order_id = data.order_id || "UNKNOWN";
     const amount = data.amount || "0";
@@ -125,10 +145,15 @@ async function handleRequest(request) {
 
     const redirectUrl = `https://www.redtrex.store/payment-success?order_id=${encodeURIComponent(
       txn_id
-    )}&amount=${encodeURIComponent(amount)}&status=${encodeURIComponent(status)}&method=${encodeURIComponent(method)}&date=${encodeURIComponent(date)}`;
+    )}&amount=${encodeURIComponent(amount)}&status=${encodeURIComponent(status)}&method=${encodeURIComponent(
+      method
+    )}&date=${encodeURIComponent(date)}`;
 
     return Response.redirect(redirectUrl, 302);
   }
 
+  // ---------------------------
+  // Default 404
+  // ---------------------------
   return new Response("Not found", { status: 404, headers: corsHeaders });
 }
