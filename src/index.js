@@ -9,6 +9,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
+// Load secrets from Wrangler
+const MERCHANT_ID = globalThis.MERCHANT_ID;
+const SECRET_KEY = globalThis.SECRET_KEY;
+
 // WebXPay LIVE Public Key
 const WEBXPAY_PUBLIC_KEY = `
 -----BEGIN PUBLIC KEY-----
