@@ -16,12 +16,12 @@ const SECRET_KEY = globalThis.SECRET_KEY;
 async function handleRequest(request) {
   const url = new URL(request.url);
 
-  if (url.pathname === "/") {
-    return new Response(
-      `✅ WebXPay backend running\nMerchant ID Loaded: ${MERCHANT_ID ? "✔" : "❌"}`,
-      { headers: corsHeaders }
-    );
-  }
+// Health check
+if (request.method === "GET" && url.pathname === "/") {
+  return new Response("✅ WebXPay LIVE backend running (Cloudflare)", {
+    headers: corsHeaders, // <- no parentheses here
+  });
+}
 
   return new Response("Not found", { status: 404, headers: corsHeaders });
 }
