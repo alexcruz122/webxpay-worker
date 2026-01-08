@@ -9,9 +9,22 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
-// Load secrets from Wrangler
+// load secrets
 const MERCHANT_ID = globalThis.MERCHANT_ID;
 const SECRET_KEY = globalThis.SECRET_KEY;
+
+async function handleRequest(request) {
+  const url = new URL(request.url);
+
+  if (url.pathname === "/") {
+    return new Response(
+      `✅ WebXPay backend running\nMerchant ID Loaded: ${MERCHANT_ID ? "✔" : "❌"}`,
+      { headers: corsHeaders }
+    );
+  }
+
+  return new Response("Not found", { status: 404, headers: corsHeaders });
+}
 
 // WebXPay LIVE Public Key
 const WEBXPAY_PUBLIC_KEY = `
